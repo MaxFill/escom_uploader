@@ -1,6 +1,8 @@
 package com.maxfill.escom.fileUploader;
 
 import com.google.gson.Gson;
+
+import java.awt.*;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -39,22 +41,24 @@ public class Main {
     private String serverURL;
     private String token;
     private String folderId;
+    private String errMsg;
     
     public static void main(String[] args) throws Exception{        
         if (args.length == 0) return;
-
         Main main = new Main();
         main.uploadFile = args[0];
-        main.checkToken(main);        
-        main.uploadFile();
+        if (main.checkToken(main)){
+            main.uploadFile();
+        } else {
+            main.openLoginDialog();
+        }
     }
     
-    private void checkToken(Main main) throws Exception{
+    private boolean checkToken(Main main) throws Exception{
+        boolean result = false;
         main.initLoadParams();
-        if (main.getToken().isEmpty()){
-            main.openLoginDialog();
-            return;
-        } 
+        if (main.getToken().isEmpty()) return result;
+
         SSLContextBuilder builder = new SSLContextBuilder();
         builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
@@ -73,11 +77,13 @@ public class Main {
             if (response.getStatusLine().getStatusCode() != 200){
                 token = "";
                 saveProperties();
+                result = true;
             }
-            if (response.getStatusLine().getStatusCode() == 401){                
-                main.openLoginDialog();
-            }
+        } catch (java.net.ConnectException ex ){
+            LOGGER.log(Level.SEVERE, null, ex);
+            errMsg = ex.getMessage();
         }
+        return result;
     }
     
     /* загрузка параметров из файла конфигурации */
@@ -107,7 +113,7 @@ public class Main {
         File upload = new File(uploadFile);
         if (!upload.exists()) return;
         
-        проверить наличие папки!0
+        //ToDo проверить наличие папки!0
         SSLContextBuilder builder = new SSLContextBuilder();
         builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
@@ -188,20 +194,14 @@ public class Main {
     }    
     
     private void openLoginDialog(){
-        java.awt.EventQueue.invokeLater(new Runnable() {
-            @Override
-            public void run() {
-                LoginDialog dialog = new LoginDialog(new javax.swing.JFrame(), true, Main.this);
-                
-                dialog.addWindowListener(new java.awt.event.WindowAdapter() {
-                    @Override
-                    public void windowClosing(java.awt.event.WindowEvent e) {
-                        System.exit(0);
-                    }
+        java.awt.EventQueue.invokeLater(
+                () -> {
+                    LoginUser dialog = new LoginUser(Main.this);
+                    dialog.setPreferredSize(new Dimension(450, 250));
+                    dialog.pack();
+                    dialog.setLocationRelativeTo(null);
+                    dialog.setVisible(true);
                 });
-                dialog.setVisible(true);
-            }
-        });
     }
     
     public String getToken(){
@@ -209,5 +209,8 @@ public class Main {
     }
     public String getServerURL() {
         return serverURL;
-    } 
+    }
+    public String getErrMsg() {
+        return errMsg;
+    }
 }

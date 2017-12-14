@@ -3,7 +3,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>com.maxfill</groupId>
     <artifactId>escom-file-uploader</artifactId>
-    <version>1.0-SNAPSHOT</version>
+    <version>1.0</version>
     <packaging>jar</packaging>
     <dependencies>
         <dependency>
@@ -36,6 +36,13 @@
             <version>3.4</version>
             <type>jar</type>
         </dependency>
+        <!-- https://mvnrepository.com/artifact/org.codehaus.mojo/ideauidesigner-maven-plugin -->
+        <dependency>
+            <groupId>org.codehaus.mojo</groupId>
+            <artifactId>ideauidesigner-maven-plugin</artifactId>
+            <version>1.0-beta-1</version>
+        </dependency>
+
     </dependencies>
     <build>
         <plugins>
@@ -43,11 +50,40 @@
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-jar-plugin</artifactId>
                 <configuration>
-                        <archive>
-                                <manifest>
-                                        <mainClass>com.maxfill.escom.fileUploader.Main</mainClass>
-                                </manifest>
-                        </archive>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.maxfill.escom.fileUploader.Main</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>exec-maven-plugin</artifactId>
+                <version>1.6.0</version>
+                <executions>
+                    <execution>
+                        <goals>
+                            <goal>exec</goal>
+                        </goals>
+                    </execution>
+                </executions>
+                <configuration>
+                    <mainClass>com.maxfill.escom.fileUploader.Main</mainClass>
+                    <executable>escom-file-uploader-1.0</executable>
+                    <!-- optional -->
+                    <workingDirectory>/home/maksim/escom_uploader/target</workingDirectory>
+                    <arguments>
+                        <argument>/home/maksim/application.pdf</argument>
+                    </arguments>
+                </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-compiler-plugin</artifactId>
+                <configuration>
+                    <source>1.8</source>
+                    <target>1.8</target>
                 </configuration>
             </plugin>
         </plugins>
