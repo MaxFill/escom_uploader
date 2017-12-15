@@ -3,6 +3,9 @@ package com.maxfill.escom.fileUploader;
 import com.google.gson.Gson;
 
 import java.awt.*;
+import java.awt.event.WindowAdapter;
+import java.awt.event.WindowEvent;
+import java.awt.event.WindowListener;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -42,22 +45,67 @@ public class Main {
     private String token;
     private String folderId;
     private String errMsg;
+    private String flAction;
     
     public static void main(String[] args) throws Exception{        
         if (args.length == 0) return;
         Main main = new Main();
-        main.uploadFile = args[0];
-        if (main.checkToken(main)){
-            main.uploadFile();
-        } else {
-            main.openLoginDialog();
+        main.flAction = args[0];
+        main.uploadFile = args[1];
+        switch (main.flAction){
+            case "-u": {
+                main.start();
+                break;
+            }
+            case "-f":{
+                WindowListener systemExit = new WindowAdapter(){
+                    public void windowClosing(WindowEvent e) {
+                        System.exit(0);
+                    }
+                };
+                main.getFolder(systemExit);
+                break;
+            }
         }
     }
-    
-    private boolean checkToken(Main main) throws Exception{
+
+    private void start(){
+        WindowListener returnToStart = new WindowAdapter(){
+            public void windowClosing(WindowEvent e) {
+                start();
+            }
+        };
+        try {
+            if (checkToken()) {
+                if (checkFolder(returnToStart)){
+                    uploadFile();
+                }
+            } else {
+                openLoginDialog(returnToStart);
+            }
+        } catch (Exception ex){
+            LOGGER.log(Level.SEVERE, null, ex);
+        }
+    }
+
+    /**
+     * Проверка папки
+     */
+    private boolean checkFolder(WindowListener windowListener) throws Exception{
+        if (StringUtils.isBlank(folderId)){
+            getFolder(windowListener);
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * Проверка ключа
+     */
+    private boolean checkToken() throws Exception{
         boolean result = false;
-        main.initLoadParams();
-        if (main.getToken().isEmpty()) return result;
+        initLoadParams();
+        if (getToken().isEmpty()) return result;
 
         SSLContextBuilder builder = new SSLContextBuilder();
         builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
@@ -85,7 +133,23 @@ public class Main {
         }
         return result;
     }
-    
+
+    /**
+     * Получение папки
+     */
+    private void getFolder(WindowListener windowListener) throws Exception{
+        if (checkToken()) {
+            openFolderSelecterDialog(windowListener);
+        } else {
+            WindowListener returnToGetFolder = new WindowAdapter(){
+                public void windowClosing(WindowEvent e) {
+                    System.exit(0);
+                }
+            };
+            openLoginDialog(returnToGetFolder);
+        }
+    }
+
     /* загрузка параметров из файла конфигурации */
     private void initLoadParams(){
         try {
@@ -135,11 +199,7 @@ public class Main {
     
     /**
      * Передаёт на сервер учётные данные пользователя. В случае успешной аутентификации получает с сервера token
-     * @param url
-     * @param login
-     * @param password
      * @return true если пользователь авторизовался и false если логин некорректный
-     * @throws Exception 
      */
     public boolean loginToServer(String url, String login, char[] password) throws Exception{
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -192,14 +252,29 @@ public class Main {
             }
         }
     }    
-    
-    private void openLoginDialog(){
+
+    private void openFolderSelecterDialog(WindowListener windowListener){
+        java.awt.EventQueue.invokeLater(
+                () -> {
+                    FolderSelecter dialog = new FolderSelecter(Main.this);
+                    dialog.setResizable(true);
+                    dialog.setPreferredSize(new Dimension(550, 350));
+                    dialog.pack();
+                    dialog.setLocationRelativeTo(null);
+                    dialog.addWindowListener(windowListener);
+                    dialog.setVisible(true);
+                });
+    }
+
+    private void openLoginDialog(WindowListener windowListener){
         java.awt.EventQueue.invokeLater(
                 () -> {
                     LoginUser dialog = new LoginUser(Main.this);
+                    dialog.setResizable(true);
                     dialog.setPreferredSize(new Dimension(450, 250));
                     dialog.pack();
                     dialog.setLocationRelativeTo(null);
+                    dialog.addWindowListener(windowListener);
                     dialog.setVisible(true);
                 });
     }

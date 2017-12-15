@@ -10,6 +10,8 @@ import org.apache.commons.lang3.StringUtils;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -43,12 +45,6 @@ public class LoginUser extends JFrame{
 
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
 
-        addWindowListener(new WindowAdapter(){
-            public void windowClosing(WindowEvent e) {
-                onCancel();
-            }
-        });
-
         // call onCancel() on ESCAPE
         contentPane.registerKeyboardAction(new ActionListener(){
             public void actionPerformed(ActionEvent e) {
@@ -58,9 +54,15 @@ public class LoginUser extends JFrame{
     }
 
     private void onOK() {
+        Set <String> errors = new HashSet <>();
+        checkFillField(errors);
+        if(!errors.isEmpty()) {
+            StringBuilder sb = new StringBuilder();
+            errors.stream().forEach(e -> sb.append(e).append("\n"));
+            showErrMsg(sb.toString());
+            return;
+        }
         try {
-            // TODO проверить адрес сервера, а если не корректный то поругаться!
-            // TODO проверить заполнение полей login и password
             String serverURL = jServer.getText().trim();
             String userLogin = jUserName.getText().trim();
             char[] userPassword = jPassword.getPassword();
@@ -70,7 +72,7 @@ public class LoginUser extends JFrame{
                     main.uploadFile();
                 } catch (Exception ex) {
                     LOGGER.log(Level.SEVERE, null, ex);
-                    this.jErrMsg.setText(ex.getMessage());
+                    showErrMsg(ex.getMessage());
                 }
                 System.exit(0);
             } else {
@@ -81,6 +83,19 @@ public class LoginUser extends JFrame{
             LOGGER.log(Level.SEVERE, null, ex);
             showErrMsg(ex.getMessage());
         }
+    }
+
+    private void checkFillField(Set <String> errors) {
+        if(StringUtils.isBlank(jUserName.getText())) {
+            errors.add("Error: User name is blank!");
+        }
+        if(jPassword.getPassword().length == 0) {
+            errors.add("Error: Password is blank!");
+        }
+        if(StringUtils.isBlank(jServer.getText())) {
+            errors.add("Error: Server URL  is blank!");
+        }
+        // TODO проверить адрес сервера, а если не корректный то поругаться!
     }
 
     private void onCancel() {
