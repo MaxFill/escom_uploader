@@ -10,6 +10,7 @@ import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import java.awt.*;
+import java.util.List;
 
 public class FolderSelecter extends JFrame implements TreeSelectionListener{
     private JTextField jSelectedFolder;
@@ -19,6 +20,7 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
     private JPanel contentPane;
 
     private final Main main;
+    private DefaultMutableTreeNode selected;
 
     public FolderSelecter(Main main) {
         this.main = main;
@@ -28,30 +30,14 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
         getRootPane().setDefaultButton(btnSelect);
         btnSelect.addActionListener(e -> onSelect());
         btnCancel.addActionListener(e -> onCancel());
-        //jSelectedFolder.setText(main.);
+        jSelectedFolder.setText(main.getFolderName());
     }
 
     private void createUIComponents() {
         btnSelect = new JButton();
         btnSelect.setText("Select");
-        DefaultMutableTreeNode root = new DefaultMutableTreeNode(new Folder(0, "Архив", true));
-
-        /*
-        DefaultMutableTreeNode lvl1node1 = new DefaultMutableTreeNode("lvl1node1"); // будет листом
-        DefaultMutableTreeNode lvl1node2 = new DefaultMutableTreeNode("lvl1node2"); // будет веткой
-        DefaultMutableTreeNode lvl1node3 = new DefaultMutableTreeNode(new Folder(2, "test2", false)); // будет листом
-
-        root.add(lvl1node1);
-        root.add(lvl1node2);
-        root.add(lvl1node3);
-
-        // добавляем дочерние элементы (листья) второй ветке
-        lvl1node2.add(new DefaultMutableTreeNode("lvl2node2_node1"));
-        lvl1node2.add(new DefaultMutableTreeNode("lvl2node2_node2"));
-
-        lvl1node2.add(new DefaultMutableTreeNode(new Folder(1, "test", false)));
-        */
-        treeFolders = new JTree(root);
+        selected = new DefaultMutableTreeNode(new Folder(null, 0, "Архив", true));
+        treeFolders = new JTree(selected);
         treeFolders.addTreeSelectionListener(this);
         treeFolders.setCellRenderer(new FoldersCellRenderer());
     }
@@ -60,7 +46,10 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
      * Сохранение выбранной папки и закрытие окна
      */
     private void onSelect() {
-        //ToDo сохранить выбранную папку!
+        Folder folder = (Folder) selected.getUserObject();
+        main.setFolderName(Utils.getPath(folder));
+        main.setFolderId(String.valueOf(folder.getId()));
+        main.saveProperties();
         dispose();
     }
 
@@ -73,11 +62,18 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
 
     @Override
     public void valueChanged(TreeSelectionEvent arg0) {
-        System.out.println("old selection: "
-                + arg0.getOldLeadSelectionPath()
-                + ";  new selection: "
-                // второй раз явно преобразовываем в строку методом toString
-                + arg0.getNewLeadSelectionPath().toString());
+        selected = (DefaultMutableTreeNode) arg0.getNewLeadSelectionPath().getLastPathComponent();
+        if(selected == null) return;
+        Folder folder = (Folder) selected.getUserObject();
+        if(folder.isChildsLoaded()) return;
+        try {
+            List <Folder> folders = main.loadFolders(folder);
+            folders.stream().forEach(f -> selected.add(new DefaultMutableTreeNode(f)));
+            treeFolders.expandPath(arg0.getNewLeadSelectionPath());
+            folder.setChildsLoaded(true);
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
     }
 
     /**
@@ -119,40 +115,6 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
         return contentPane;
     }
 
-    private class Folder{
-        private Integer id;
-        private String name;
-        private Boolean readonly;
-
-        public Folder(Integer id, String name, Boolean readonly) {
-            this.id = id;
-            this.name = name;
-            this.readonly = readonly;
-        }
-
-        @Override
-        public String toString() {
-            return name;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if(this == o) return true;
-            if(o == null || getClass() != o.getClass()) return false;
-
-            Folder folder = (Folder) o;
-
-            if(!id.equals(folder.id)) return false;
-
-            return true;
-        }
-
-        @Override
-        public int hashCode() {
-            return id.hashCode();
-        }
-    }
-
     public class FoldersCellRenderer extends DefaultTreeCellRenderer{
         @Override
         public Component getTreeCellRendererComponent(JTree tree, Object value,
@@ -161,7 +123,7 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
 
             Folder folder = (Folder) ((DefaultMutableTreeNode) value).getUserObject();
 
-            if(folder.readonly) {
+            if(folder.getReadonly()) {
                 btnSelect.setEnabled(false);
                 setForeground(new Color(139, 141, 141));
             } else {

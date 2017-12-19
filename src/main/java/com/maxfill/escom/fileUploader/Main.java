@@ -1,7 +1,6 @@
 package com.maxfill.escom.fileUploader;
 
 import com.google.gson.Gson;
-
 import java.awt.*;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
@@ -11,6 +10,8 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
@@ -39,13 +40,15 @@ public class Main {
     private static final String PROP_SERVER_URL = "SERVER_URL";
     private static final String PROP_TOKEN = "TOKEN";
     private static final String PROP_FOLDER_ID = "FOLDER_ID";
-    
+    private static final String PROP_FOLDER_NAME = "FOLDER_NAME";
+
     private String uploadFile;
     private String serverURL;
     private String token;
-    private String folderId;
     private String errMsg;
     private String flAction;
+    private String folderId;
+    private String folderName;
     
     public static void main(String[] args) throws Exception{        
         if (args.length == 0) return;
@@ -102,48 +105,47 @@ public class Main {
     /**
      * Проверка ключа
      */
-    private boolean checkToken() throws Exception{
-        boolean result = false;
+    private boolean checkToken() {
         initLoadParams();
-        if (getToken().isEmpty()) return result;
+        if (StringUtils.isBlank(getToken())) return false;
 
-        SSLContextBuilder builder = new SSLContextBuilder();
-        builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
-        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
-        CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
+        try {
+            SSLContextBuilder builder = new SSLContextBuilder();
+            builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
+            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
+            CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
 
-        HttpPost httppost = new HttpPost(serverURL + "/checkToken");               
-        StringBuilder sb = new StringBuilder();
-        sb.append("{").append("token : '").append(token).append("' ").append("}");
-        StringEntity postingString = new StringEntity(sb.toString());
+            HttpPost httppost = new HttpPost(serverURL + "/checkToken");
+            StringBuilder sb = new StringBuilder();
+            sb.append("{").append("token : '").append(token).append("' ").append("}");
+            StringEntity postingString = new StringEntity(sb.toString());
 
-        httppost.setHeader("Content-type", "application/json");
-        httppost.setEntity(postingString);        
+            httppost.setHeader("Content-type", "application/json");
+            httppost.setEntity(postingString);
 
-        try (CloseableHttpResponse response = httpclient.execute(httppost)) {
-            System.out.println("Process check token status = " + response.getStatusLine());
-            if (response.getStatusLine().getStatusCode() != 200){
+            try (CloseableHttpResponse response = httpclient.execute(httppost)) {
+                //System.out.println("Process check token status = " + response.getStatusLine());
+                if(response.getStatusLine().getStatusCode() == 200) return true;
                 token = "";
                 saveProperties();
-                result = true;
             }
-        } catch (java.net.ConnectException ex ){
+        } catch (Exception ex){
             LOGGER.log(Level.SEVERE, null, ex);
             errMsg = ex.getMessage();
         }
-        return result;
+        return false;
     }
 
     /**
      * Получение папки
      */
-    private void getFolder(WindowListener windowListener) throws Exception{
+    private void getFolder(WindowListener windowListener) {
         if (checkToken()) {
             openFolderSelecterDialog(windowListener);
         } else {
             WindowListener returnToGetFolder = new WindowAdapter(){
                 public void windowClosing(WindowEvent e) {
-                    System.exit(0);
+                    getFolder(windowListener);
                 }
             };
             openLoginDialog(returnToGetFolder);
@@ -152,6 +154,10 @@ public class Main {
 
     /* загрузка параметров из файла конфигурации */
     private void initLoadParams(){
+        serverURL = DEFAULT_URL;
+        token = "";
+        folderId = "";
+        folderName = "";
         try {
             File file = new File(CONFIG_FILE);
             if (file.exists()){
@@ -160,14 +166,12 @@ public class Main {
                 serverURL = (String) properties.get(PROP_SERVER_URL);
                 token = (String) properties.get(PROP_TOKEN);
                 folderId = (String) properties.get(PROP_FOLDER_ID);
+                folderName = (String) properties.getProperty(PROP_FOLDER_NAME);
             } else {
-                file.createNewFile();                
-                serverURL = DEFAULT_URL;
-                token = "";
-                folderId = "";
+                file.createNewFile();
                 saveProperties();
             }
-        } catch (IOException ex) {
+        } catch (IOException | NullPointerException ex) {
             LOGGER.log(Level.SEVERE, null, ex);
         } 
     }
@@ -177,7 +181,7 @@ public class Main {
         File upload = new File(uploadFile);
         if (!upload.exists()) return;
         
-        //ToDo проверить наличие папки!0
+        //ToDo проверить наличие папки!
         SSLContextBuilder builder = new SSLContextBuilder();
         builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
         SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
@@ -221,18 +225,52 @@ public class Main {
 
         try (CloseableHttpResponse response = httpclient.execute(httppost)) {
             if (response.getStatusLine().getStatusCode() != 200) return false;
-            HttpEntity resEntity = response.getEntity();            
+            HttpEntity resEntity = response.getEntity();
             if (resEntity == null) return false;
             String json_string = EntityUtils.toString(resEntity);
             Gson gson = new Gson();
-            Map<String, String> tokenMap = gson.fromJson(json_string, Map.class);                
+            Map<String, String> tokenMap = gson.fromJson(json_string, Map.class);
             token = tokenMap.get("token");
             EntityUtils.consume(resEntity);
             saveProperties();
-            return true;            
+            return true;
         }
     }
-    
+
+    /**
+     * Передаёт на сервер запрос на получение вложенных папок
+     */
+    public List<Folder> loadFolders(Folder folder) throws Exception{
+        String parent = String.valueOf(folder.getId());
+        SSLContextBuilder builder = new SSLContextBuilder();
+        builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
+        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
+        CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
+
+        HttpPost httppost = new HttpPost(serverURL + "/folders");
+        StringBuilder sb = new StringBuilder();
+        sb.append("{")
+                .append("token : '").append(token).append("', ")
+                .append("parent : '").append(parent).append("'")
+                .append("}");
+        StringEntity postingString = new StringEntity(sb.toString());
+
+        httppost.setHeader("Content-type", "application/json");
+        httppost.setEntity(postingString);
+
+        try (CloseableHttpResponse response = httpclient.execute(httppost)) {
+            if (response.getStatusLine().getStatusCode() != 200) return null;
+            HttpEntity resEntity = response.getEntity();
+            if (resEntity == null) return null;
+            String json_string = EntityUtils.toString(resEntity);
+            Gson gson = new Gson();
+            List<Folder> folders = gson.fromJson(json_string, List.class);
+            folders.stream().forEach(f-> f.setParent(folder));
+            EntityUtils.consume(resEntity);
+            return folders;
+        }
+    }
+
     public void saveProperties(){
         OutputStream output = null;
         try {
@@ -240,7 +278,12 @@ public class Main {
             output = new FileOutputStream(CONFIG_FILE);
             properties.setProperty(PROP_SERVER_URL, serverURL);
             properties.setProperty(PROP_TOKEN, token);
-            properties.setProperty(PROP_FOLDER_ID, folderId);
+            if (StringUtils.isNotBlank(folderId)) {
+                properties.setProperty(PROP_FOLDER_ID, folderId);
+            }
+            if (StringUtils.isNotBlank(folderName)) {
+                properties.setProperty(PROP_FOLDER_NAME, folderName);
+            }
             properties.store(output, null);
         } catch (IOException ex) {
             LOGGER.log(Level.SEVERE, null, ex);
@@ -287,5 +330,16 @@ public class Main {
     }
     public String getErrMsg() {
         return errMsg;
+    }
+
+    public void setFolderId(String folderId) {
+        this.folderId = folderId;
+    }
+
+    public String getFolderName() {
+        return folderName;
+    }
+    public void setFolderName(String folderName) {
+        this.folderName = folderName;
     }
 }

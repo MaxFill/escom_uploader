@@ -10,6 +10,9 @@ import org.apache.commons.lang3.StringUtils;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.logging.Level;
@@ -53,6 +56,10 @@ public class LoginUser extends JFrame{
         }, KeyStroke.getKeyStroke(KeyEvent.VK_ESCAPE, 0), JComponent.WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
     }
 
+    /**
+     * Подключение к серверу
+     * ToDo сделать блокировку после 5-ти неудачных попыток
+     */
     private void onOK() {
         Set <String> errors = new HashSet <>();
         checkFillField(errors);
@@ -67,18 +74,9 @@ public class LoginUser extends JFrame{
             String userLogin = jUserName.getText().trim();
             char[] userPassword = jPassword.getPassword();
             // подключиться к серверу для login и получения token
-            if(main.loginToServer(serverURL, userLogin, userPassword)) {
-                try {
-                    main.uploadFile();
-                } catch (Exception ex) {
-                    LOGGER.log(Level.SEVERE, null, ex);
-                    showErrMsg(ex.getMessage());
-                }
-                System.exit(0);
-            } else {
+            if(!main.loginToServer(serverURL, userLogin, userPassword)) {
                 showErrMsg("Login failed! User name or password incorrect.");
             }
-
         } catch (Exception ex) {
             LOGGER.log(Level.SEVERE, null, ex);
             showErrMsg(ex.getMessage());
@@ -102,18 +100,20 @@ public class LoginUser extends JFrame{
         System.exit(0);
     }
 
+    /**
+     * Добавление сообщения об ошибке
+     */
     private void showErrMsg(String msg) {
         if(StringUtils.isBlank(msg)) return;
         this.jErrMsg.setVisible(true);
-        if(msg.length() > 100) {
-            this.jErrMsg.setText(msg.substring(0, 100));
-        } else {
-            this.jErrMsg.setText(msg);
-        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE)).append(" ").append(msg);
+        sb.append("\n").append(this.jErrMsg.getText());
+        this.jErrMsg.setText(sb.toString());
     }
 
     private void createUIComponents() {
-        // TODO: place custom component creation code here
+
     }
 
     /**
@@ -159,10 +159,12 @@ public class LoginUser extends JFrame{
         panel3.add(label3, new GridConstraints(2, 0, 1, 1, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_NONE, GridConstraints.SIZEPOLICY_FIXED, GridConstraints.SIZEPOLICY_FIXED, null, null, null, 0, false));
         jServer = new JTextField();
         panel3.add(jServer, new GridConstraints(2, 1, 1, 2, GridConstraints.ANCHOR_WEST, GridConstraints.FILL_HORIZONTAL, GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_FIXED, null, new Dimension(150, -1), null, 0, false));
+        final JScrollPane scrollPane1 = new JScrollPane();
+        panel3.add(scrollPane1, new GridConstraints(3, 1, 1, 1, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_WANT_GROW, null, null, null, 0, false));
         jErrMsg = new JTextPane();
         jErrMsg.setForeground(new Color(-64251));
         jErrMsg.setText("");
-        panel3.add(jErrMsg, new GridConstraints(3, 1, 1, 2, GridConstraints.ANCHOR_CENTER, GridConstraints.FILL_BOTH, GridConstraints.SIZEPOLICY_CAN_SHRINK | GridConstraints.SIZEPOLICY_CAN_GROW, GridConstraints.SIZEPOLICY_WANT_GROW, null, new Dimension(150, 50), null, 0, false));
+        scrollPane1.setViewportView(jErrMsg);
     }
 
     /** @noinspection ALL */
