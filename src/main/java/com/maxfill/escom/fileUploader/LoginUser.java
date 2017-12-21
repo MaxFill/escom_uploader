@@ -10,7 +10,6 @@ import org.apache.commons.lang3.StringUtils;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -39,8 +38,8 @@ public class LoginUser extends JFrame{
         setContentPane(contentPane);
         getRootPane().setDefaultButton(btnLogin);
 
-        this.jErrMsg.setVisible(false);
         this.jServer.setText(main.getServerURL());
+
         showErrMsg(main.getErrMsg());
 
         btnLogin.addActionListener(e -> onOK());
@@ -74,7 +73,11 @@ public class LoginUser extends JFrame{
             String userLogin = jUserName.getText().trim();
             char[] userPassword = jPassword.getPassword();
             // подключиться к серверу для login и получения token
-            if(!main.loginToServer(serverURL, userLogin, userPassword)) {
+            if(main.loginToServer(serverURL, userLogin, userPassword)) {
+                System.out.println("INFO: Log on to the server is ок!");
+                dispose();
+                dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
+            } else {
                 showErrMsg("Login failed! User name or password incorrect.");
             }
         } catch (Exception ex) {
@@ -96,6 +99,9 @@ public class LoginUser extends JFrame{
         // TODO проверить адрес сервера, а если не корректный то поругаться!
     }
 
+    /**
+     * Закрытие диалога
+     */
     private void onCancel() {
         System.exit(0);
     }
@@ -105,7 +111,6 @@ public class LoginUser extends JFrame{
      */
     private void showErrMsg(String msg) {
         if(StringUtils.isBlank(msg)) return;
-        this.jErrMsg.setVisible(true);
         StringBuilder sb = new StringBuilder();
         sb.append(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE)).append(" ").append(msg);
         sb.append("\n").append(this.jErrMsg.getText());
@@ -113,6 +118,7 @@ public class LoginUser extends JFrame{
     }
 
     private void createUIComponents() {
+
 
     }
 

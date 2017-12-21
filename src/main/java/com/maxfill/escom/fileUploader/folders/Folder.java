@@ -1,9 +1,9 @@
-package com.maxfill.escom.fileUploader;
+package com.maxfill.escom.fileUploader.folders;
 
 public class Folder{
     private final Integer id;
     private final String name;
-    private final Boolean readonly;
+    private final Boolean readOnly;
 
     private Folder parent;
     private boolean childsLoaded;
@@ -11,13 +11,13 @@ public class Folder{
     public Folder(Integer id, String name, Boolean readonly) {
         this.id = id;
         this.name = name;
-        this.readonly = readonly;
+        this.readOnly = readonly;
     }
 
     public Folder(Folder parent, Integer id, String name, Boolean readonly) {
         this.id = id;
         this.name = name;
-        this.readonly = readonly;
+        this.readOnly = readonly;
         this.parent = parent;
     }
 
@@ -27,8 +27,8 @@ public class Folder{
         return id;
     }
 
-    public Boolean getReadonly() {
-        return readonly;
+    public Boolean getReadOnly() {
+        return readOnly;
     }
 
     public String getName() {

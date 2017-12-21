@@ -1,5 +1,7 @@
 package com.maxfill.escom.fileUploader;
 
+import com.maxfill.escom.fileUploader.folders.Folder;
+
 public final class Utils{
 
     private Utils() {
