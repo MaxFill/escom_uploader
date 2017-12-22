@@ -25,6 +25,8 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.io.*;
 import java.lang.reflect.Type;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -42,31 +44,34 @@ public class Main {
     private static final String PROP_FOLDER_NAME = "FOLDER_NAME";
 
     private static final String LOGIN_REQUIRED_MSG = "Login is required on the server!";
-    private static final String ARG_UPLOAD = "File download to the server and creating a document.";
+    private static final String ARG_UPLOAD = "File(s) download to the server and creating a document(s).";
     private static final String ARG_FOLDER = "Open dialog window for select the folder on the server into which you will load files and create documents.";
     private static final String ARG_HELP = "Show this help.";
+    private static final String ARG_DELETE = "Delete the file(s) after uploading it to the server";
 
     private static final Options options = new Options();
 
-    private String uploadFile;
+    private String uploadPath;
     private String serverURL;
     private String token;
     private String errMsg;
     private String folderId;
     private String folderName;
+    private Boolean isDeleteFile = false;
 
     public static void main(String[] args) throws Exception{        
         if (args.length == 0) return;
 
         Option optUpload = new Option("u", "upload", true, ARG_UPLOAD);
         optUpload.setRequired(false);
-        optUpload.setArgName("file");
+        optUpload.setArgName("path");
         options.addOption(optUpload);
 
         Option optFolder = new Option("f", "folder", false, ARG_FOLDER);
         optFolder.setRequired(false);
         options.addOption(optFolder);
         options.addOption("h", "help", false, ARG_HELP);
+        options.addOption("d", "delete", false, ARG_DELETE);
 
         CommandLineParser parser = new BasicParser();
         CommandLine cmd;
@@ -86,8 +91,11 @@ public class Main {
         Main main = new Main();
 
         if (cmd.hasOption("upload")) {
-            main.uploadFile = cmd.getOptionValue("upload");
-            main.start();
+            main.uploadPath = cmd.getOptionValue("upload");
+            if (cmd.hasOption("delete")) {
+                main.isDeleteFile = true;
+            }
+            main.startUpload();
         } else
             if (cmd.hasOption("folder")){
                 main.getFolder(new WindowAdapter(){
@@ -98,16 +106,19 @@ public class Main {
             }
     }
 
-    private void start(){
+    private void startUpload(){
+        if (uploadPath == null) {
+            throw new RuntimeException("ERROR: command line argument path download is blank!");
+        }
         WindowListener returnToStart = new WindowAdapter(){
             public void windowClosing(WindowEvent e) {
-                start();
+                startUpload();
             }
         };
         try {
             if (checkToken()) {
                 if (checkFolder(returnToStart)){
-                    uploadFile();
+                    uploadFiles();
                 }
             } else {
                 openLoginDialog(returnToStart);
@@ -115,6 +126,30 @@ public class Main {
         } catch (Exception ex){
             LOGGER.log(Level.SEVERE, null, ex);
         }
+    }
+
+    /**
+     * Загрузка файлов
+     */
+    private void uploadFiles() {
+        File source = new File(uploadPath);
+        if (!source.exists()){
+            throw new RuntimeException("ERROR: path download is not exists!");
+        }
+
+        if (source.isFile()){
+            uploadFile(source);
+        } else
+            if (source.isDirectory()) {
+                try {
+                    Files.list(source.toPath())
+                            .filter(Files::isRegularFile)
+                            .forEach(path -> uploadFile(path.toFile()));
+                }catch (IOException ex){
+                    LOGGER.log(Level.SEVERE, null, ex);
+                    throw new RuntimeException(ex);
+                }
+            }
     }
 
     /**
@@ -185,28 +220,48 @@ public class Main {
     /**
      * Передача файла на сервер
      */
-    public void uploadFile() throws Exception{
-        if (StringUtils.isBlank(token) || StringUtils.isBlank(uploadFile)) return;        
-        File upload = new File(uploadFile);
-        if (!upload.exists()) return;
-        
-        //ToDo проверить наличие папки!
+    public void uploadFile(File uploadFile) {
         SSLContextBuilder builder = new SSLContextBuilder();
-        builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
-        SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
-        CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
+        try {
+            builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
+            SSLConnectionSocketFactory sslsf = new SSLConnectionSocketFactory(builder.build());
+            CloseableHttpClient httpclient = HttpClients.custom().setSSLSocketFactory(sslsf).build();
 
-        HttpPost httppost = new HttpPost(serverURL + "/upload");       
+            HttpPost httppost = new HttpPost(serverURL + "/upload");
 
-        HttpEntity reqEntity = MultipartEntityBuilder.create()
-                .addPart("token", new StringBody(token, ContentType.TEXT_PLAIN)) 
-                .addPart("folder", new StringBody(folderId, ContentType.TEXT_PLAIN)) 
-                .addPart("file", new FileBody(upload))
-                .build();
+            HttpEntity reqEntity = MultipartEntityBuilder.create()
+                    .addPart("token", new StringBody(token, ContentType.TEXT_PLAIN))
+                    .addPart("folder", new StringBody(folderId, ContentType.TEXT_PLAIN))
+                    .addPart("file", new FileBody(uploadFile))
+                    .build();
 
-        httppost.setEntity(reqEntity);        
-        try (CloseableHttpResponse response = httpclient.execute(httppost)){
-            System.out.println("INFO: Process upload file status = " + response.getStatusLine());
+            httppost.setEntity(reqEntity);
+            try (CloseableHttpResponse response = httpclient.execute(httppost)) {
+                switch(response.getStatusLine().getStatusCode()) {
+                    case 204: {
+                        System.out.println("ERROR: No access to download the file in the folder" + folderName);
+                        break;
+                    }
+                    case 400: {
+                        System.out.println("ERROR: The folder " + folderName + " is not found on the server");
+                        break;
+                    }
+                    case 200: {
+                        System.out.println("INFO: The file " + folderName + " uploaded to the server");
+                        if(isDeleteFile) {
+                            uploadFile.delete();
+                        }
+                        break;
+                    }
+                    default: {
+                        System.out.println("INFO: Process upload file status = " + response.getStatusLine());
+                        break;
+                    }
+                }
+            }
+        }catch (Exception ex){
+            LOGGER.log(Level.SEVERE, null, ex);
+            throw new RuntimeException(ex);
         }
     }   
     
