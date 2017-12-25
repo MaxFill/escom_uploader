@@ -63,11 +63,12 @@ public class Main {
     private Boolean isRecursive = false;
     private Boolean isNeedSelectFolder = false;
 
-    public static void main(String[] args) throws Exception{        
+    public static void main(String[] args) throws Exception{
         if (args.length == 0) return;
 
-        Option optUpload = new Option("u", "upload", false, ARG_UPLOAD);
-        optUpload.setRequired(true);
+        Option optUpload = new Option("u", "upload", true, ARG_UPLOAD);
+        optUpload.setRequired(false);
+        optUpload.setOptionalArg(false);
         optUpload.setArgName("path");
         options.addOption(optUpload);
 
@@ -109,11 +110,7 @@ public class Main {
             main.startUpload();
         } else
             if (cmd.hasOption("folder")){
-                main.getFolder(new WindowAdapter(){
-                    public void windowClosing(WindowEvent e) {
-                        System.exit(0);
-                    }
-                });
+                main.getFolder(() -> System.exit(0));
             } else {
                 showHelp();
             }
@@ -126,17 +123,9 @@ public class Main {
 
         try {
             if (checkToken()) {
-                checkTargetFolder(new WindowAdapter(){
-                    public void windowClosing(WindowEvent e) {
-                        uploadFiles();
-                    }
-                });
+                checkTargetFolder(()->uploadFiles());
             } else {
-                openLoginDialog( new WindowAdapter(){
-                    public void windowClosing(WindowEvent e) {
-                        startUpload();
-                    }
-                });
+                openLoginDialog(()->startUpload());
             }
         } catch (Exception ex){
             LOGGER.log(Level.SEVERE, null, ex);
@@ -176,9 +165,9 @@ public class Main {
     /**
      * Проверка папки на сервере, в которую будут грузиться файлы
      */
-    private boolean checkTargetFolder(WindowListener windowListener) throws Exception{
+    private boolean checkTargetFolder(Callback callback) throws Exception{
         if (StringUtils.isBlank(folderId) || isNeedSelectFolder){
-            getFolder(windowListener);
+            getFolder(callback);
             return false;
         }
         return true;
@@ -225,16 +214,11 @@ public class Main {
     /**
      * Получение папки
      */
-    private void getFolder(WindowListener windowListener) {
+    private void getFolder(Callback callback) {
         if (checkToken()) {
-            openFolderSelecterDialog(windowListener);
+            openFolderSelecterDialog(callback);
         } else {
-            WindowListener returnToGetFolder = new WindowAdapter(){
-                public void windowClosing(WindowEvent e) {
-                    getFolder(windowListener);
-                }
-            };
-            openLoginDialog(returnToGetFolder);
+            openLoginDialog(()->getFolder(callback));
         }
     }
 
@@ -268,7 +252,7 @@ public class Main {
                         break;
                     }
                     case 200: {
-                        System.out.println("INFO: The file " + folderName + " uploaded to the server");
+                        System.out.println("INFO: The file " + uploadFile.getName() + " uploaded to the server");
                         if(isDeleteFile) {
                             uploadFile.delete();
                         }
@@ -418,15 +402,14 @@ public class Main {
     /**
      * Отображение диалога выбора папки
      */
-    private void openFolderSelecterDialog(WindowListener windowListener){
+    private void openFolderSelecterDialog(Callback callback){
         java.awt.EventQueue.invokeLater(
                 () -> {
-                    FolderSelecter dialog = new FolderSelecter(Main.this);
+                    FolderSelecter dialog = new FolderSelecter(Main.this, callback);
                     dialog.setResizable(true);
                     dialog.setPreferredSize(new Dimension(550, 350));
                     dialog.pack();
                     dialog.setLocationRelativeTo(null);
-                    dialog.addWindowListener(windowListener);
                     dialog.setVisible(true);
                 });
     }
@@ -434,17 +417,16 @@ public class Main {
     /**
      * Отображение диалога логина
      */
-    private void openLoginDialog(WindowListener windowListener){
-        //java.awt.EventQueue.invokeLater(
-        //        () -> {
-                    LoginUser dialog = new LoginUser(Main.this);
+    private void openLoginDialog(Callback callback){
+        java.awt.EventQueue.invokeLater(
+                () -> {
+                    LoginUser dialog = new LoginUser(Main.this, callback);
                     dialog.setResizable(true);
                     dialog.setPreferredSize(new Dimension(450, 250));
                     dialog.pack();
                     dialog.setLocationRelativeTo(null);
-                    dialog.addWindowListener(windowListener);
                     dialog.setVisible(true);
-          //      });
+                });
     }
 
     /**

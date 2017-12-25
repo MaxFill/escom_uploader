@@ -29,10 +29,12 @@ public class LoginUser extends JFrame{
     private JButton btnCancel;
     private JTextPane jErrMsg;
 
+    private final Callback callback;
     private final Main main;
 
-    public LoginUser(Main main) {
+    public LoginUser(Main main, Callback callback) {
         this.main = main;
+        this.callback = callback;
 
         $$$setupUI$$$();
         setContentPane(contentPane);
@@ -46,6 +48,12 @@ public class LoginUser extends JFrame{
         btnCancel.addActionListener(e -> onCancel());
 
         setDefaultCloseOperation(DO_NOTHING_ON_CLOSE);
+
+        addWindowListener(new WindowAdapter(){
+            public void windowClosing(WindowEvent e) {
+                onCancel();
+            }
+        });
 
         // call onCancel() on ESCAPE
         contentPane.registerKeyboardAction(new ActionListener(){
@@ -76,7 +84,8 @@ public class LoginUser extends JFrame{
             if(main.loginToServer(serverURL, userLogin, userPassword)) {
                 System.out.println("INFO: Log on to the server is ок!");
                 dispose();
-                dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
+                callback.goToBack();
+                //dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
             } else {
                 showErrMsg("Login failed! User name or password incorrect.");
             }
