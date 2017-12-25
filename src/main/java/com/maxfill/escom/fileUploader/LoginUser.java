@@ -118,8 +118,6 @@ public class LoginUser extends JFrame{
     }
 
     private void createUIComponents() {
-
-
     }
 
     /**

@@ -12,6 +12,7 @@ import javax.swing.event.TreeSelectionListener;
 import javax.swing.tree.DefaultMutableTreeNode;
 import javax.swing.tree.DefaultTreeCellRenderer;
 import java.awt.*;
+import java.awt.event.WindowEvent;
 import java.util.List;
 
 public class FolderSelecter extends JFrame implements TreeSelectionListener{
@@ -22,6 +23,7 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
     private JPanel contentPane;
     private JTextPane jErrMsg;
     private JPanel JErrParent;
+    private JButton btnContinue;
 
     private final Main main;
     private DefaultMutableTreeNode selected;
@@ -31,16 +33,23 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
         $$$setupUI$$$();
         createUIComponents();
 
-        btnSelect.setEnabled(false);
         setContentPane(contentPane);
         getRootPane().setDefaultButton(btnSelect);
+
+        btnContinue.setVisible(main.getNeedSelectFolder());
+        btnSelect.setEnabled(false);
+
         btnSelect.addActionListener(e -> onSelect());
         btnCancel.addActionListener(e -> onCancel());
+        btnContinue.addActionListener(e -> onContinue());
+
         if(StringUtils.isNotBlank(main.getFolderName())) {
             jSelectedFolder.setText(main.getFolderName());
             JErrParent.setVisible(false);
+            btnContinue.setEnabled(true);
         } else {
             JErrParent.setVisible(true);
+            btnContinue.setEnabled(false);
             jErrMsg.setText("You need to specify the folder!");
         }
     }
@@ -56,14 +65,24 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
     }
 
     /**
-     * Сохранение выбранной папки и закрытие окна
+     * Закрытие окна. Дальнейшее поведение зависит от слушателя данного события
+     */
+    private void onContinue(){
+       dispose();
+       dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING));
+    }
+
+    /**
+     * Сохранение выбранной папки
      */
     private void onSelect() {
         Folder folder = (Folder) selected.getUserObject();
         main.setFolderName(Utils.getPath(folder));
         main.setFolderId(String.valueOf(folder.getId()));
         main.saveProperties();
-        dispose();
+        if (!main.getNeedSelectFolder()) {
+            dispose();
+        }
     }
 
     /**

@@ -26,12 +26,13 @@ import java.awt.event.WindowListener;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.file.Files;
-import java.nio.file.Paths;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.logging.Level;
 import java.util.logging.Logger;
+import java.util.stream.Stream;
 
 public class Main {
     private static final String DEFAULT_URL = "https://localhost:8443/escom-bpm-web";
@@ -47,7 +48,8 @@ public class Main {
     private static final String ARG_UPLOAD = "File(s) download to the server and creating a document(s).";
     private static final String ARG_FOLDER = "Open dialog window for select the folder on the server into which you will load files and create documents.";
     private static final String ARG_HELP = "Show this help.";
-    private static final String ARG_DELETE = "Delete the file(s) after uploading it to the server";
+    private static final String ARG_DELETE = "Delete the file(s) after uploading it to the server. No delete folder(s)!";
+    private static final String ARG_RECURSIVE = "Download files from subfolders.";
 
     private static final Options options = new Options();
 
@@ -58,12 +60,14 @@ public class Main {
     private String folderId;
     private String folderName;
     private Boolean isDeleteFile = false;
+    private Boolean isRecursive = false;
+    private Boolean isNeedSelectFolder = false;
 
     public static void main(String[] args) throws Exception{        
         if (args.length == 0) return;
 
-        Option optUpload = new Option("u", "upload", true, ARG_UPLOAD);
-        optUpload.setRequired(false);
+        Option optUpload = new Option("u", "upload", false, ARG_UPLOAD);
+        optUpload.setRequired(true);
         optUpload.setArgName("path");
         options.addOption(optUpload);
 
@@ -72,6 +76,7 @@ public class Main {
         options.addOption(optFolder);
         options.addOption("h", "help", false, ARG_HELP);
         options.addOption("d", "delete", false, ARG_DELETE);
+        options.addOption("r", "recursive", false, ARG_RECURSIVE);
 
         CommandLineParser parser = new BasicParser();
         CommandLine cmd;
@@ -91,10 +96,16 @@ public class Main {
         Main main = new Main();
 
         if (cmd.hasOption("upload")) {
-            main.uploadPath = cmd.getOptionValue("upload");
+            if (cmd.hasOption("folder")) {
+                main.isNeedSelectFolder = true;
+            }
             if (cmd.hasOption("delete")) {
                 main.isDeleteFile = true;
             }
+            if (cmd.hasOption("recursive")) {
+                main.isRecursive = true;
+            }
+            main.uploadPath = cmd.getOptionValue("upload");
             main.startUpload();
         } else
             if (cmd.hasOption("folder")){
@@ -103,6 +114,8 @@ public class Main {
                         System.exit(0);
                     }
                 });
+            } else {
+                showHelp();
             }
     }
 
@@ -110,18 +123,20 @@ public class Main {
         if (uploadPath == null) {
             throw new RuntimeException("ERROR: command line argument path download is blank!");
         }
-        WindowListener returnToStart = new WindowAdapter(){
-            public void windowClosing(WindowEvent e) {
-                startUpload();
-            }
-        };
+
         try {
             if (checkToken()) {
-                if (checkFolder(returnToStart)){
-                    uploadFiles();
-                }
+                checkTargetFolder(new WindowAdapter(){
+                    public void windowClosing(WindowEvent e) {
+                        uploadFiles();
+                    }
+                });
             } else {
-                openLoginDialog(returnToStart);
+                openLoginDialog( new WindowAdapter(){
+                    public void windowClosing(WindowEvent e) {
+                        startUpload();
+                    }
+                });
             }
         } catch (Exception ex){
             LOGGER.log(Level.SEVERE, null, ex);
@@ -142,9 +157,15 @@ public class Main {
         } else
             if (source.isDirectory()) {
                 try {
-                    Files.list(source.toPath())
-                            .filter(Files::isRegularFile)
-                            .forEach(path -> uploadFile(path.toFile()));
+                    Stream <Path> files = null;
+                    if (isRecursive) {
+                        files = Files.walk(source.toPath());
+                    } else {
+                        files = Files.list(source.toPath());
+                    }
+                    if (files != null) {
+                        files.filter(Files::isRegularFile).forEach(path -> uploadFile(path.toFile()));
+                    }
                 }catch (IOException ex){
                     LOGGER.log(Level.SEVERE, null, ex);
                     throw new RuntimeException(ex);
@@ -153,10 +174,10 @@ public class Main {
     }
 
     /**
-     * Проверка папки
+     * Проверка папки на сервере, в которую будут грузиться файлы
      */
-    private boolean checkFolder(WindowListener windowListener) throws Exception{
-        if (StringUtils.isBlank(folderId)){
+    private boolean checkTargetFolder(WindowListener windowListener) throws Exception{
+        if (StringUtils.isBlank(folderId) || isNeedSelectFolder){
             getFolder(windowListener);
             return false;
         }
@@ -479,6 +500,10 @@ public class Main {
 
     public void setFolderId(String folderId) {
         this.folderId = folderId;
+    }
+
+    public Boolean getNeedSelectFolder() {
+        return isNeedSelectFolder;
     }
 
     public String getFolderName() {
