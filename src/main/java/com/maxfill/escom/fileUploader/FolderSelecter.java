@@ -17,6 +17,8 @@ import java.awt.event.WindowEvent;
 import java.util.List;
 
 public class FolderSelecter extends JFrame implements TreeSelectionListener{
+    private static final long serialVersionUID = 295318601675513431L;
+    
     private JTextField jSelectedFolder;
     private JTree treeFolders;
     private JButton btnCancel;
