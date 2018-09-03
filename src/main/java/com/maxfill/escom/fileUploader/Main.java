@@ -25,6 +25,7 @@ import java.awt.event.WindowEvent;
 import java.awt.event.WindowListener;
 import java.io.*;
 import java.lang.reflect.Type;
+import java.nio.charset.Charset;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -224,6 +225,7 @@ public class Main {
 
     /**
      * Передача файла на сервер
+     * @param uploadFile
      */
     public void uploadFile(File uploadFile) {
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -236,8 +238,9 @@ public class Main {
 
             HttpEntity reqEntity = MultipartEntityBuilder.create()
                     .addPart("token", new StringBody(token, ContentType.TEXT_PLAIN))
-                    .addPart("folder", new StringBody(folderId, ContentType.TEXT_PLAIN))
+                    .addPart("folder", new StringBody(folderId, ContentType.TEXT_PLAIN.withCharset("UTF-8")))
                     .addPart("file", new FileBody(uploadFile))
+                    .setCharset(Charset.forName("UTF-8"))
                     .build();
 
             httppost.setEntity(reqEntity);
