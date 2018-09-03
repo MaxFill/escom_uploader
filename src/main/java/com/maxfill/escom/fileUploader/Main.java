@@ -248,15 +248,19 @@ public class Main {
             try (CloseableHttpResponse response = httpclient.execute(httppost)) {
                 switch(response.getStatusLine().getStatusCode()) {
                     case 401: {
-                        System.out.println("ERROR: user unauthorized in the server!");
+                        System.out.println("ERROR: user unauthorized on the server!");
+                        break;
+                    }
+                    case 409: {
+                        System.out.println("ERROR: the upload file [" + uploadFile.getName() + "] allredy exist in the folder [" + folderName +"]!");
                         break;
                     }
                     case 204: {
-                        System.out.println("ERROR: No access to download the file in the folder" + folderName);
+                        System.out.println("ERROR: user not have access to upload file in the server folder [" + folderName +"]");
                         break;
                     }
                     case 400: {
-                        System.out.println("ERROR: The folder " + folderName + " is not found on the server");
+                        System.out.println("ERROR: the folder [" + folderName + "] is not found on the server");
                         break;
                     }
                     case 200: {
