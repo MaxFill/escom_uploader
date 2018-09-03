@@ -239,6 +239,7 @@ public class Main {
             HttpEntity reqEntity = MultipartEntityBuilder.create()
                     .addPart("token", new StringBody(token, ContentType.TEXT_PLAIN))
                     .addPart("folder", new StringBody(folderId, ContentType.TEXT_PLAIN.withCharset("UTF-8")))
+                    .addPart("fileName", new StringBody(uploadFile.getName(), ContentType.TEXT_PLAIN.withCharset("UTF-8")))
                     .addPart("file", new FileBody(uploadFile))
                     .setCharset(Charset.forName("UTF-8"))
                     .build();
@@ -246,6 +247,10 @@ public class Main {
             httppost.setEntity(reqEntity);
             try (CloseableHttpResponse response = httpclient.execute(httppost)) {
                 switch(response.getStatusLine().getStatusCode()) {
+                    case 401: {
+                        System.out.println("ERROR: user unauthorized in the server!");
+                        break;
+                    }
                     case 204: {
                         System.out.println("ERROR: No access to download the file in the folder" + folderName);
                         break;
