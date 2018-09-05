@@ -31,6 +31,7 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.stream.Stream;
@@ -141,9 +142,9 @@ public class Main {
         if (!source.exists()){
             throw new RuntimeException("ERROR: path download is not exists!");
         }
-
+        int index = 0;
         if (source.isFile()){
-            uploadFile(source);
+            uploadFile(source, index);
         } else
             if (source.isDirectory()) {
                 try {
@@ -154,7 +155,10 @@ public class Main {
                         files = Files.list(source.toPath());
                     }
                     if (files != null) {
-                        files.filter(Files::isRegularFile).forEach(path -> uploadFile(path.toFile()));
+                        AtomicInteger counter = new AtomicInteger(0);
+                        files.filter(Files::isRegularFile).forEach(path -> {
+                            uploadFile(path.toFile(), counter.getAndIncrement());
+                        });
                     }
                 }catch (IOException ex){
                     LOGGER.log(Level.SEVERE, null, ex);
@@ -227,7 +231,7 @@ public class Main {
      * Передача файла на сервер
      * @param uploadFile
      */
-    public void uploadFile(File uploadFile) {
+    public void uploadFile(File uploadFile, int index) {
         SSLContextBuilder builder = new SSLContextBuilder();
         try {
             builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
@@ -248,23 +252,27 @@ public class Main {
             try (CloseableHttpResponse response = httpclient.execute(httppost)) {
                 switch(response.getStatusLine().getStatusCode()) {
                     case 401: {
-                        System.out.println("ERROR: user unauthorized on the server!");
+                        System.out.println("ERROR: [" + index + "] user unauthorized on the server!");
                         break;
                     }
                     case 409: {
-                        System.out.println("ERROR: the upload file [" + uploadFile.getName() + "] allredy exist in the folder [" + folderName +"]!");
+                        System.out.println("ERROR: [" + index + "] the upload file [" + uploadFile.getName() + "] allredy exist in the folder [" + folderName +"]!");
                         break;
                     }
                     case 204: {
-                        System.out.println("ERROR: user not have access to upload file in the server folder [" + folderName +"]");
+                        System.out.println("ERROR: [" + index + "] user not have access to upload file in the server folder [" + folderName +"]");
                         break;
                     }
                     case 400: {
-                        System.out.println("ERROR: the folder [" + folderName + "] is not found on the server");
+                        System.out.println("ERROR: [" + index + "] the folder [" + folderName + "] is not found on the server");
+                        break;
+                    }
+                    case 500: {
+                        System.out.println("ERROR: [" + index + "] A server error occurred while downloading the file [" + uploadFile.getName() + "] ");
                         break;
                     }
                     case 200: {
-                        System.out.println("INFO: The file " + uploadFile.getName() + " uploaded to the server");
+                        System.out.println("INFO: [" + index + "] The file " + uploadFile.getName() + " uploaded to the server");
                         if(isDeleteFile) {
                             uploadFile.delete();
                         }

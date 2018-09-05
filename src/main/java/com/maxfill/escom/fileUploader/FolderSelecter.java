@@ -27,6 +27,7 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
     private JTextPane jErrMsg;
     private JPanel JErrParent;
     private JButton btnContinue;
+    private JScrollPane jScrollPane;
 
     private final Callback callback;
     private final Main main;
@@ -69,6 +70,7 @@ public class FolderSelecter extends JFrame implements TreeSelectionListener{
     }
 
     private void createUIComponents() {
+        jScrollPane = new JScrollPane();
         btnSelect = new JButton();
         btnSelect.setText("Select");
         btnSelect.setToolTipText("To select a highlighted folder");
