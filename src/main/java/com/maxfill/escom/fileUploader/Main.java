@@ -38,7 +38,6 @@ import java.util.stream.Stream;
 
 public class Main {
     private static final String DEFAULT_URL = "https://localhost:8443/escom-bpm-web";
-    private static final String CONFIG_FILE = "escom-file-uploader.properties";
     private static final Logger LOGGER = Logger.getLogger(Main.class.getName());
     
     private static final String PROP_SERVER_URL = "SERVER_URL";
@@ -52,6 +51,7 @@ public class Main {
     private static final String ARG_HELP = "Show this help.";
     private static final String ARG_DELETE = "Delete the file(s) after uploading it to the server. No delete folder(s)!";
     private static final String ARG_RECURSIVE = "Download files from subfolders.";
+    private static final String ARG_CONFIG = "path to file for save configuration.";
 
     private static final Options options = new Options();
 
@@ -64,6 +64,7 @@ public class Main {
     private Boolean isDeleteFile = false;
     private Boolean isRecursive = false;
     private Boolean isNeedSelectFolder = false;
+    private String pathConfFile;
 
     public static void main(String[] args) throws Exception{
         if (args.length == 0) return;
@@ -81,6 +82,10 @@ public class Main {
         options.addOption("d", "delete", false, ARG_DELETE);
         options.addOption("r", "recursive", false, ARG_RECURSIVE);
 
+        Option optConfig = new Option("c", "conf", true, ARG_CONFIG);
+        optFolder.setRequired(true);
+        options.addOption(optConfig);
+
         CommandLineParser parser = new BasicParser();
         CommandLine cmd;
 
@@ -91,7 +96,7 @@ public class Main {
             throw new RuntimeException(ex);
         }
 
-        if (cmd.hasOption("h") || (!cmd.hasOption("upload") && !cmd.hasOption("folder")) ){
+        if (cmd.hasOption("h") || !cmd.hasOption("conf") || (!cmd.hasOption("upload") && !cmd.hasOption("folder")) ){
             showHelp();
             return;
         }
@@ -108,6 +113,7 @@ public class Main {
             if (cmd.hasOption("recursive")) {
                 main.isRecursive = true;
             }
+            main.pathConfFile = cmd.getOptionValue("conf");
             main.uploadPath = cmd.getOptionValue("upload");
             main.startUpload();
         } else
@@ -182,7 +188,7 @@ public class Main {
      * Проверка ключа
      */
     private boolean checkToken() {
-        initLoadParams();
+        initLoadParams(new File( pathConfFile));
         if (StringUtils.isBlank(getToken())) {
             errMsg = LOGIN_REQUIRED_MSG;
             return false;
@@ -232,6 +238,7 @@ public class Main {
      * @param uploadFile
      */
     public void uploadFile(File uploadFile, int index) {
+        if (index > 500) return;
         SSLContextBuilder builder = new SSLContextBuilder();
         try {
             builder.loadTrustMaterial(null, new TrustSelfSignedStrategy());
@@ -368,20 +375,14 @@ public class Main {
     /**
      * Загрузка параметров из файла конфигурации
      */
-    private void initLoadParams(){
+    private void initLoadParams(File file){
         serverURL = DEFAULT_URL;
         token = "";
         folderId = "";
         folderName = "";
         try {
-            File file = new File(CONFIG_FILE);
             if (file.exists()){
-                Properties properties = new Properties();
-                properties.load(new FileInputStream(file));
-                serverURL = (String) properties.get(PROP_SERVER_URL);
-                token = (String) properties.get(PROP_TOKEN);
-                folderId = (String) properties.get(PROP_FOLDER_ID);
-                folderName = (String) properties.getProperty(PROP_FOLDER_NAME);
+                loadProperties(file);
             } else {
                 file.createNewFile();
                 saveProperties();
@@ -391,6 +392,15 @@ public class Main {
         }
     }
 
+    private void loadProperties(File file) throws IOException {
+        Properties properties = new Properties();
+        properties.load(new FileInputStream(file));
+        serverURL = (String) properties.get(PROP_SERVER_URL);
+        token = (String) properties.get(PROP_TOKEN);
+        folderId = (String) properties.get(PROP_FOLDER_ID);
+        folderName = (String) properties.getProperty(PROP_FOLDER_NAME);
+    }
+
     /**
      * Сохранение параметров в файл конфигурации
      */
@@ -398,7 +408,7 @@ public class Main {
         OutputStream output = null;
         try {
             Properties properties = new Properties();
-            output = new FileOutputStream(CONFIG_FILE);
+            output = new FileOutputStream(pathConfFile);
             properties.setProperty(PROP_SERVER_URL, serverURL);
             properties.setProperty(PROP_TOKEN, token);
             if (StringUtils.isNotBlank(folderId)) {
