@@ -42,6 +42,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
 import java.util.logging.Formatter;
 import java.util.logging.Level;
@@ -50,7 +51,6 @@ import java.util.logging.Logger;
 import java.util.logging.SimpleFormatter;
 import java.util.stream.Stream;
 import org.apache.commons.lang3.time.DateFormatUtils;
-import org.apache.http.client.utils.DateUtils;
 
 public class Main {
     private static final String DEFAULT_URL = "https://localhost:8443/escom-bpm-web";
@@ -169,9 +169,11 @@ public class Main {
             logName.append(DateFormatUtils.format(new Date(), "yyyy-MM-dd_HH:mm")).append(".log");
             Path logPath = FileSystems.getDefault().getPath(logName.toString());
             FileHandler fh = new FileHandler(logPath.toString());
+            Formatter formatter = getFormater();
+            fh.setFormatter(formatter);
             LOGGER.addHandler(fh);
-            fh.setFormatter(getFormater());
             AtomicInteger error = new AtomicInteger(0);
+            AtomicInteger counter = new AtomicInteger(0);
             int index = 0;
             if (source.isFile()){
                 uploadFile(source, index, error, fh);
@@ -184,8 +186,7 @@ public class Main {
                         } else {
                             files = Files.list(source.toPath());
                         }
-                        if (files != null) {
-                            AtomicInteger counter = new AtomicInteger(0);
+                        if (files != null) {                            
                             files.filter(Files::isRegularFile).forEach(path -> {
                                 uploadFile(path.toFile(), counter.getAndIncrement(), error, fh);
                             });
@@ -196,9 +197,13 @@ public class Main {
                     }
                 }
             if (error.get() == 0){
-                System.out.println("INFO: Successfully! The files were downloaded without errors." );
+                System.out.println("*************************************************************");
+                System.out.println("INFO: Successfully! The [" + counter.get() + "] file(s) were downloaded without errors." );
+                System.out.println("*************************************************************");
             } else {
-                System.out.println("INFO: File download complete. Number of errors " + error.get()+ ". See log file for detailed information!");
+                System.out.println("*************************************************************");
+                System.out.println("INFO: File(s) download complete. Number of errors [" + error.get()+ "]. See log file for detailed information!");
+                System.out.println("*************************************************************");
             }
         } catch (IOException | SecurityException ex) {
             LOGGER.log(Level.SEVERE, null, ex);
@@ -342,7 +347,7 @@ public class Main {
                     }
                     case 200: {
                         //System.out.println("INFO: [" + index + "] The file " + uploadFile.getName() + " uploaded to the server");
-                        LOGGER.log(Level.INFO, "[{0}] The file [{1}] uploaded to the server.", new Object[]{index, uploadFile.getName()});
+                        LOGGER.log(Level.INFO, "  [{0}] The file [{1}] uploaded to the server.", new Object[]{index, uploadFile.getName()});
                         if(isDeleteFile) {
                             uploadFile.delete();
                         }
@@ -363,7 +368,10 @@ public class Main {
     /**
      * Передаёт на сервер учётные данные пользователя. В случае успешной аутентификации получает с сервера token
      * @param url
+     * @param login
+     * @param password
      * @return true если пользователь авторизовался и false если логин некорректный
+     * @throws java.lang.Exception
      */
     public boolean loginToServer(String url, String login, char[] password) throws Exception{
         SSLContextBuilder builder = new SSLContextBuilder();
@@ -400,6 +408,8 @@ public class Main {
     /**
      * Передаёт на сервер запрос на получение вложенных папок
      * @param folder
+     * @return 
+     * @throws java.lang.Exception
      */
     public List<Folder> loadFolders(Folder folder) throws Exception{
         String parent = String.valueOf(folder.getId());
