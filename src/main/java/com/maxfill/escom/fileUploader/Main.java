@@ -26,15 +26,31 @@ import java.awt.event.WindowListener;
 import java.io.*;
 import java.lang.reflect.Type;
 import java.nio.charset.Charset;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.security.KeyManagementException;
+import java.security.KeyStoreException;
+import java.security.NoSuchAlgorithmException;
+import java.text.MessageFormat;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.GregorianCalendar;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
 import java.util.logging.Level;
+import java.util.logging.LogRecord;
 import java.util.logging.Logger;
+import java.util.logging.SimpleFormatter;
 import java.util.stream.Stream;
+import org.apache.commons.lang3.time.DateFormatUtils;
+import org.apache.http.client.utils.DateUtils;
 
 public class Main {
     private static final String DEFAULT_URL = "https://localhost:8443/escom-bpm-web";
@@ -144,35 +160,68 @@ public class Main {
      * Загрузка файлов
      */
     private void uploadFiles() {
-        File source = new File(uploadPath);
-        if (!source.exists()){
-            throw new RuntimeException("ERROR: path download is not exists!");
-        }
-        int index = 0;
-        if (source.isFile()){
-            uploadFile(source, index);
-        } else
-            if (source.isDirectory()) {
-                try {
-                    Stream <Path> files = null;
-                    if (isRecursive) {
-                        files = Files.walk(source.toPath());
-                    } else {
-                        files = Files.list(source.toPath());
-                    }
-                    if (files != null) {
-                        AtomicInteger counter = new AtomicInteger(0);
-                        files.filter(Files::isRegularFile).forEach(path -> {
-                            uploadFile(path.toFile(), counter.getAndIncrement());
-                        });
-                    }
-                }catch (IOException ex){
-                    LOGGER.log(Level.SEVERE, null, ex);
-                    throw new RuntimeException(ex);
-                }
+        try {
+            File source = new File(uploadPath);
+            if (!source.exists()){
+                throw new RuntimeException("ERROR: path download is not exists!");
             }
+            StringBuilder logName = new StringBuilder("upload_");
+            logName.append(DateFormatUtils.format(new Date(), "yyyy-MM-dd_HH:mm")).append(".log");
+            Path logPath = FileSystems.getDefault().getPath(logName.toString());
+            FileHandler fh = new FileHandler(logPath.toString());
+            LOGGER.addHandler(fh);
+            fh.setFormatter(getFormater());
+            AtomicInteger error = new AtomicInteger(0);
+            int index = 0;
+            if (source.isFile()){
+                uploadFile(source, index, error, fh);
+            } else
+                if (source.isDirectory()) {
+                    try {
+                        Stream <Path> files = null;
+                        if (isRecursive) {
+                            files = Files.walk(source.toPath());
+                        } else {
+                            files = Files.list(source.toPath());
+                        }
+                        if (files != null) {
+                            AtomicInteger counter = new AtomicInteger(0);
+                            files.filter(Files::isRegularFile).forEach(path -> {
+                                uploadFile(path.toFile(), counter.getAndIncrement(), error, fh);
+                            });
+                        }
+                    }catch (IOException ex){
+                        LOGGER.log(Level.SEVERE, null, ex);
+                        throw new RuntimeException(ex);
+                    }
+                }
+            if (error.get() == 0){
+                System.out.println("INFO: Successfully! The files were downloaded without errors." );
+            } else {
+                System.out.println("INFO: File download complete. Number of errors " + error.get()+ ". See log file for detailed information!");
+            }
+        } catch (IOException | SecurityException ex) {
+            LOGGER.log(Level.SEVERE, null, ex);
+        }
     }
 
+    private Formatter getFormater(){
+        return new Formatter() {
+            @Override
+            public String format(LogRecord record) {
+                SimpleDateFormat logTime = new SimpleDateFormat("dd-MM-yyyy HH:mm:ss");
+                Calendar cal = new GregorianCalendar();
+                cal.setTimeInMillis(record.getMillis());
+                return record.getLevel() + " "
+                        + logTime.format(cal.getTime())
+                        + " || "                        
+                        + record.getSourceMethodName()
+                        + "() : "
+                        + MessageFormat.format(record.getMessage(), record.getParameters())+ "\n";                
+            }
+        };
+    }
+    
     /**
      * Проверка папки на сервере, в которую будут грузиться файлы
      */
@@ -236,8 +285,11 @@ public class Main {
     /**
      * Передача файла на сервер
      * @param uploadFile
+     * @param index
+     * @param error
+     * @param fh
      */
-    public void uploadFile(File uploadFile, int index) {
+    public void uploadFile(File uploadFile, int index, AtomicInteger error, FileHandler fh) {
         if (index > 500) return;
         SSLContextBuilder builder = new SSLContextBuilder();
         try {
@@ -260,26 +312,37 @@ public class Main {
                 switch(response.getStatusLine().getStatusCode()) {
                     case 401: {
                         System.out.println("ERROR: [" + index + "] user unauthorized on the server!");
+                        LOGGER.log(Level.SEVERE, "[{0}] user unauthorized on the server!", index);
+                        error.getAndIncrement();
                         break;
                     }
                     case 409: {
                         System.out.println("ERROR: [" + index + "] the upload file [" + uploadFile.getName() + "] allredy exist in the folder [" + folderName +"]!");
+                        LOGGER.log(Level.SEVERE, "[{0}] the upload file [{1}] allredy exist in the folder [{2}]!", new Object[]{index, uploadFile.getName(), folderName});
+                        error.getAndIncrement();
                         break;
                     }
                     case 204: {
                         System.out.println("ERROR: [" + index + "] user not have access to upload file in the server folder [" + folderName +"]");
+                        LOGGER.log(Level.SEVERE, "[{0}] user not have access to upload file in the server folder [{1}]", new Object[]{index, folderName});
+                        error.getAndIncrement();
                         break;
                     }
                     case 400: {
                         System.out.println("ERROR: [" + index + "] the folder [" + folderName + "] is not found on the server");
+                        LOGGER.log(Level.SEVERE, "[{0}] the folder [{1}] is not found on the server", new Object[]{index, folderName});
+                        error.getAndIncrement();
                         break;
                     }
                     case 500: {
                         System.out.println("ERROR: [" + index + "] A server error occurred while downloading the file [" + uploadFile.getName() + "] ");
+                        LOGGER.log(Level.SEVERE, "[{0}] A server error occurred while downloading the file [{1}] ", new Object[]{index, uploadFile.getName()});
+                        error.getAndIncrement();
                         break;
                     }
                     case 200: {
-                        System.out.println("INFO: [" + index + "] The file " + uploadFile.getName() + " uploaded to the server");
+                        //System.out.println("INFO: [" + index + "] The file " + uploadFile.getName() + " uploaded to the server");
+                        LOGGER.log(Level.INFO, "[{0}] The file [{1}] uploaded to the server.", new Object[]{index, uploadFile.getName()});
                         if(isDeleteFile) {
                             uploadFile.delete();
                         }
@@ -291,7 +354,7 @@ public class Main {
                     }
                 }
             }
-        }catch (Exception ex){
+        }catch (IOException | KeyManagementException | KeyStoreException | NoSuchAlgorithmException ex){
             LOGGER.log(Level.SEVERE, null, ex);
             throw new RuntimeException(ex);
         }
@@ -299,6 +362,7 @@ public class Main {
     
     /**
      * Передаёт на сервер учётные данные пользователя. В случае успешной аутентификации получает с сервера token
+     * @param url
      * @return true если пользователь авторизовался и false если логин некорректный
      */
     public boolean loginToServer(String url, String login, char[] password) throws Exception{
@@ -335,6 +399,7 @@ public class Main {
 
     /**
      * Передаёт на сервер запрос на получение вложенных папок
+     * @param folder
      */
     public List<Folder> loadFolders(Folder folder) throws Exception{
         String parent = String.valueOf(folder.getId());
