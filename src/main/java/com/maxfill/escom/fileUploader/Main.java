@@ -166,7 +166,7 @@ public class Main {
                 throw new RuntimeException("ERROR: path download is not exists!");
             }
             StringBuilder logName = new StringBuilder("upload_");
-            logName.append(DateFormatUtils.format(new Date(), "yyyy-MM-dd_HH:mm")).append(".log");
+            logName.append(DateFormatUtils.format(new Date(), "yyyy-MM-dd_HH-mm")).append(".log");
             Path logPath = FileSystems.getDefault().getPath(logName.toString());
             FileHandler fh = new FileHandler(logPath.toString());
             Formatter formatter = getFormater();
