@@ -16,7 +16,6 @@ public final class Utils{
         if (sb.length() > 0){
             sb.append("->");
         }
-        sb.append(folder.getName());
-        return sb.toString();
+        return sb.append(folder.getName()).toString();
     }
 }
